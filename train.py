@@ -43,13 +43,13 @@ data_loader = {
 }
 
 
-def train_model(model, criterion, optimizer, scheduler, cfg):
+def train_model(model, criterion, optimizer, scheduler, cfg, start_epoch=1):
 
     best_acc = 0.0
     best_map = 0.0
     best_model_wts = copy.deepcopy(model.state_dict())
 
-    for epoch in range(1, cfg['max_epoch']):
+    for epoch in range(start_epoch, cfg['max_epoch'] + 1):
 
         print('-' * 60)
         print('Epoch: {} / {}'.format(epoch, cfg['max_epoch']))
@@ -68,20 +68,31 @@ def train_model(model, criterion, optimizer, scheduler, cfg):
             ft_all, lbl_all = None, None
 
             for i, (centers, corners, normals, neighbor_index, targets) in enumerate(data_loader[phrase]):
-                centers = centers.cuda()
-                corners = corners.cuda()
-                normals = normals.cuda()
-                neighbor_index = neighbor_index.cuda()
-                targets = targets.cuda()
+                centers = centers.to(device)
+                corners = corners.to(device)
+                normals = normals.to(device)
+                neighbor_index = neighbor_index.to(device)
+                targets = targets.to(device)
 
                 with torch.set_grad_enabled(phrase == 'train'):
                     outputs, feas = model(centers, corners, normals, neighbor_index)
+
+                    if not torch.isfinite(outputs).all():
+                        print("Output NaN")
+                        optimizer.zero_grad()
+                        continue
+
+                    outputs = torch.clamp(outputs, -50, 50)
                     _, preds = torch.max(outputs, 1)
+
                     loss = criterion(outputs, targets)
 
                     if phrase == 'train':
                         optimizer.zero_grad()
                         loss.backward()
+
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
                         optimizer.step()
 
                     if phrase == 'test' and cfg['retrieval_on']:
@@ -102,6 +113,15 @@ def train_model(model, criterion, optimizer, scheduler, cfg):
                 if epoch_acc > best_acc:
                     best_acc = epoch_acc
                     best_model_wts = copy.deepcopy(model.state_dict())
+
+                    torch.save({
+                        "epoch": epoch,
+                        "model": model.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "best_acc": best_acc,
+                        "best_map": best_map
+                    }, os.path.join(cfg['ckpt_root'], 'MeshNet_best.pkl'))
+
                 print_info = '{} Loss: {:.4f} Acc: {:.4f} (best {:.4f})'.format(phrase, epoch_loss, epoch_acc, best_acc)
 
                 if cfg['retrieval_on']:
@@ -109,9 +129,15 @@ def train_model(model, criterion, optimizer, scheduler, cfg):
                     if epoch_map > best_map:
                         best_map = epoch_map
                     print_info += ' mAP: {:.4f}'.format(epoch_map)
-                
+
                 if epoch % cfg['save_steps'] == 0:
-                    torch.save(copy.deepcopy(model.state_dict()), os.path.join(cfg['ckpt_root'], '{}.pkl'.format(epoch)))
+                    torch.save({
+                        "epoch": epoch,
+                        "model": model.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                        "best_acc": best_acc,
+                        "best_map": best_map
+                    }, os.path.join(cfg['ckpt_root'], f"{epoch}.pkl"))
                 
                 print(print_info)
 
@@ -145,7 +171,32 @@ if __name__ == '__main__':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg['max_epoch'])
 
     # start training
+    # start training
     if not os.path.exists(cfg['ckpt_root']):
         os.mkdir(cfg['ckpt_root'])
-    best_model_wts = train_model(model, criterion, optimizer, scheduler, cfg)
-    torch.save(best_model_wts, os.path.join(cfg['ckpt_root'], 'MeshNet_best.pkl'))
+
+    checkpoint_path = os.path.join(cfg['ckpt_root'], "checkpoint.pkl")
+
+    start_epoch = 1
+
+    pkl_files = [f for f in os.listdir(cfg['ckpt_root']) if f.endswith('.pkl') and f[0].isdigit()]
+
+    if len(pkl_files) > 0:
+        epochs = [int(f.split('.')[0]) for f in pkl_files]
+
+        last_epoch = max(epochs)
+
+        last_ckpt = os.path.join(cfg['ckpt_root'], f"{last_epoch}.pkl")
+
+        print("Resume from:", last_ckpt)
+
+        checkpoint = torch.load(last_ckpt)
+
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+
+        start_epoch = checkpoint["epoch"] + 1
+
+        print("Resume epoch:", start_epoch)
+
+    best_model_wts = train_model(model, criterion, optimizer, scheduler, cfg, start_epoch)

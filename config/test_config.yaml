@@ -9,7 +9,7 @@ dataset:
   max_faces: 1024
 
 # model
-load_model: 'MeshNet_ModelNet40_250e_bs128_lr6e-4.pkl'
+load_model: '/home/gt/tmp/MeshNet2/MeshNet/ckpt_root/MeshNet_best.pkl'
 
 # MeshNet
 MeshNet:
@@ -17,7 +17,7 @@ MeshNet:
     num_kernel: 64
     sigma: 0.2
   mesh_convolution:
-    aggregation_method: 'Concat'  # Concat/Max/Average
+    aggregation_method: 'Concat'
   mask_ratio: 0.95
   dropout: 0.5
   num_classes: 40

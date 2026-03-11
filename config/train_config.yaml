@@ -26,11 +26,11 @@ MeshNet:
 
 # train
 seed: 0
-lr: 0.0006
+lr: 0.0001
 momentum: 0.9
 weight_decay: 0.0005
 batch_size: 128
-max_epoch: 250
+max_epoch: 100
 optimizer: 'adamw' # sgd/adamw
 scheduler: 'cos' # step/cos
 milestones: [30, 60, 90]

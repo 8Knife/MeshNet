@@ -30,11 +30,11 @@ def test_model(model):
 
     with torch.no_grad():
         for i, (centers, corners, normals, neighbor_index, targets) in enumerate(data_loader):
-            centers = centers.cuda()
-            corners = corners.cuda()
-            normals = normals.cuda()
-            neighbor_index = neighbor_index.cuda()
-            targets = targets.cuda()
+            centers = centers.to(device)
+            corners = corners.to(device)
+            normals = normals.to(device)
+            neighbor_index = neighbor_index.to(device)
+            targets = targets.to(device)
 
             outputs, feas = model(centers, corners, normals, neighbor_index)
             _, preds = torch.max(outputs, 1)
@@ -56,7 +56,11 @@ if __name__ == '__main__':
     device = torch.device("npu")
 
     model = model.to(device)
-    model.load_state_dict(torch.load(cfg['load_model']))
+    # 1. Load the entire checkpoint dictionary
+    checkpoint = torch.load(cfg['load_model'])
+
+    # 2. Extract just the model weights and load them
+    model.load_state_dict(checkpoint['model'])
     model.eval()
 
     test_model(model)

@@ -5,19 +5,6 @@ from pathlib import Path
 from rich.progress import track
 
 
-def find_neighbor(faces, faces_contain_this_vertex, vf1, vf2, except_face):
-    for i in (faces_contain_this_vertex[vf1] & faces_contain_this_vertex[vf2]):
-        if i != except_face:
-            face = faces[i].tolist()
-
-            if vf1 in face:
-                face.remove(vf1)
-
-            if vf2 in face:
-                face.remove(vf2)
-            return i
-
-    return except_face
 
 if __name__ == '__main__':
     root = Path('/home/gt/tmp/MeshNet2/MeshNet/dataset/ModelNet40')
