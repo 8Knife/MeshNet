@@ -3,6 +3,11 @@ import os
 import random
 import torch
 from torch.autograd import Variable
+
+import torch_npu
+from torch_npu.contrib import transfer_to_npu
+
+
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
@@ -120,8 +125,9 @@ if __name__ == '__main__':
 
     # prepare model
     model = MeshNet(cfg=cfg['MeshNet'], require_fea=True)
-    model.cuda()
-    model = nn.DataParallel(model)
+    device = torch.device("npu")
+
+    model = model.to(device)
 
     # criterion
     criterion = nn.CrossEntropyLoss()
