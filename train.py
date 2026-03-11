@@ -16,7 +16,8 @@ from utils.retrival import append_feature, calculate_map
 
 
 cfg = get_train_config()
-os.environ['CUDA_VISIBLE_DEVICES'] = cfg['cuda_devices']
+# os.environ['CUDA_VISIBLE_DEVICES'] = cfg['cuda_devices']
+os.environ['ASCEND_RT_VISIBLE_DEVICES'] = cfg['npu_devices']
 
 # seed
 seed = cfg['seed']

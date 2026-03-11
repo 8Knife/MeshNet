@@ -11,7 +11,8 @@ from utils.retrival import append_feature, calculate_map
 
 
 cfg = get_test_config()
-os.environ['CUDA_VISIBLE_DEVICES'] = cfg['cuda_devices']
+# os.environ['CUDA_VISIBLE_DEVICES'] = cfg['cuda_devices']
+os.environ['ASCEND_RT_VISIBLE_DEVICES'] = cfg['npu_devices']
 
 
 data_set = ModelNet40(cfg=cfg['dataset'], part='test')

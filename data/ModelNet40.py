@@ -2,8 +2,9 @@ import numpy as np
 import os
 import torch
 import torch.utils.data as data
-import pymeshlab
-from data.preprocess import find_neighbor
+# import pymeshlab
+import trimesh
+# from data.preprocess import find_neighbor
 
 type_to_index_map = {
     'night_stand': 0, 'range_hood': 1, 'plant': 2, 'chair': 3, 'tent': 4,
@@ -84,20 +85,11 @@ class ModelNet40(data.Dataset):
 
 
 def process_mesh(path, max_faces):
-    ms = pymeshlab.MeshSet()
-    ms.clear()
+    # 加载mesh，vertices，faces
+    mesh = trimesh.load_mesh(path, process=False)
 
-    # load mesh
-    ms.load_new_mesh(path)
-    mesh = ms.current_mesh()
-    
-    # # clean up
-    # mesh, _ = pymesh.remove_isolated_vertices(mesh)
-    # mesh, _ = pymesh.remove_duplicated_vertices(mesh)
-
-    # get elements
-    vertices = mesh.vertex_matrix()
-    faces = mesh.face_matrix()
+    vertices = mesh.vertices.copy()
+    faces = mesh.faces.copy()
 
     if faces.shape[0] != max_faces:     # only occur once in train set of Manifold40
         print("Model with more than {} faces ({}): {}".format(max_faces, faces.shape[0], path))
@@ -112,39 +104,115 @@ def process_mesh(path, max_faces):
     vertices /= np.sqrt(max_len)
 
     # get normal vector
-    ms.clear()
-    mesh = pymeshlab.Mesh(vertices, faces)
-    ms.add_mesh(mesh)
-    face_normal = ms.current_mesh().face_normal_matrix()
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    face_normal = mesh.face_normals
 
     # get neighbors
-    faces_contain_this_vertex = []
-    for i in range(len(vertices)):
-        faces_contain_this_vertex.append(set([]))
-    centers = []
-    corners = []
+# region
+    # faces_contain_this_vertex = []
+    # for i in range(len(vertices)):
+    #     faces_contain_this_vertex.append(set([]))
+    # centers = []
+    # corners = []
+    # for i in range(len(faces)):
+    #     [v1, v2, v3] = faces[i]
+    #     x1, y1, z1 = vertices[v1]
+    #     x2, y2, z2 = vertices[v2]
+    #     x3, y3, z3 = vertices[v3]
+    #     centers.append([(x1 + x2 + x3) / 3, (y1 + y2 + y3) / 3, (z1 + z2 + z3) / 3])
+    #     corners.append([x1, y1, z1, x2, y2, z2, x3, y3, z3])
+    #     faces_contain_this_vertex[v1].add(i)
+    #     faces_contain_this_vertex[v2].add(i)
+    #     faces_contain_this_vertex[v3].add(i)
+    #
+    # neighbors = []
+    # for i in range(len(faces)):
+    #     [v1, v2, v3] = faces[i]
+    #     n1 = find_neighbor(faces, faces_contain_this_vertex, v1, v2, i)
+    #     n2 = find_neighbor(faces, faces_contain_this_vertex, v2, v3, i)
+    #     n3 = find_neighbor(faces, faces_contain_this_vertex, v3, v1, i)
+    #     neighbors.append([n1, n2, n3])
+    #
+    # centers = np.array(centers)
+    # corners = np.array(corners)
+    # faces = np.concatenate([centers, corners, face_normal], axis=1)
+    # neighbors = np.array(neighbors)
+# endregion
+    # ---------------------------------------
+    # 1. 计算每个三角面的 center 和 corner
+    # ---------------------------------------
+
+    centers = []  # 每个face中心点 (x,y,z)
+    corners = []  # 每个face三个顶点坐标 (x1,y1,z1,x2,y2,z2,x3,y3,z3)
+
     for i in range(len(faces)):
-        [v1, v2, v3] = faces[i]
+        # faces[i] = [v1,v2,v3] 三角面三个顶点index
+        v1, v2, v3 = faces[i]
+
+        # 取顶点坐标
         x1, y1, z1 = vertices[v1]
         x2, y2, z2 = vertices[v2]
         x3, y3, z3 = vertices[v3]
-        centers.append([(x1 + x2 + x3) / 3, (y1 + y2 + y3) / 3, (z1 + z2 + z3) / 3])
-        corners.append([x1, y1, z1, x2, y2, z2, x3, y3, z3])
-        faces_contain_this_vertex[v1].add(i)
-        faces_contain_this_vertex[v2].add(i)
-        faces_contain_this_vertex[v3].add(i)
 
-    neighbors = []
-    for i in range(len(faces)):
-        [v1, v2, v3] = faces[i]
-        n1 = find_neighbor(faces, faces_contain_this_vertex, v1, v2, i)
-        n2 = find_neighbor(faces, faces_contain_this_vertex, v2, v3, i)
-        n3 = find_neighbor(faces, faces_contain_this_vertex, v3, v1, i)
-        neighbors.append([n1, n2, n3])
+        # -----------------------------
+        # face center
+        # -----------------------------
+        centers.append([
+            (x1 + x2 + x3) / 3,
+            (y1 + y2 + y3) / 3,
+            (z1 + z2 + z3) / 3
+        ])
 
-    centers = np.array(centers)
-    corners = np.array(corners)
-    faces = np.concatenate([centers, corners, face_normal], axis=1)
-    neighbors = np.array(neighbors)
+        # -----------------------------
+        # face corners
+        # -----------------------------
+        corners.append([
+            x1, y1, z1,
+            x2, y2, z2,
+            x3, y3, z3
+        ])
+
+    # 转成 numpy
+    centers = np.array(centers)  # (F,3)
+    corners = np.array(corners)  # (F,9)
+
+    # ---------------------------------------
+    # 2. 计算 face neighbors（替代 find_neighbor）
+    # ---------------------------------------
+
+    # 初始化邻居列表
+    neighbors = [[] for _ in range(len(faces))]
+
+    # trimesh已经计算好共享边的face
+    for f1, f2 in mesh.face_adjacency:
+        neighbors[f1].append(f2)
+        neighbors[f2].append(f1)
+
+    # MeshNet要求每个face必须有3个neighbor
+    neighbors_fixed = []
+
+    for i, neigh in enumerate(neighbors):
+
+        # 如果邻居少于3个，用自己补齐
+        if len(neigh) < 3:
+            neigh = neigh + [i] * (3 - len(neigh))
+
+        # 如果多于3个，截断
+        else:
+            neigh = neigh[:3]
+
+        neighbors_fixed.append(neigh)
+
+    neighbors = np.array(neighbors_fixed)  # (F,3)
+
+    # ---------------------------------------
+    # 3. 构造MeshNet输入特征
+    # ---------------------------------------
+
+    faces = np.concatenate([
+        centers,  # (F,3)
+        corners,  # (F,9)
+        face_normal  # (F,3)
+    ], axis=1)
 
     return faces, neighbors
