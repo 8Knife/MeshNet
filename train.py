@@ -1,5 +1,6 @@
 import copy
 import os
+import time
 import random
 import torch
 from torch.autograd import Variable
@@ -22,7 +23,7 @@ from utils.retrival import append_feature, calculate_map
 
 cfg = get_train_config()
 # os.environ['CUDA_VISIBLE_DEVICES'] = cfg['cuda_devices']
-os.environ['ASCEND_RT_VISIBLE_DEVICES'] = cfg['npu_devices']
+# os.environ['ASCEND_RT_VISIBLE_DEVICES'] = cfg['npu_devices']
 
 # seed
 seed = cfg['seed']
@@ -51,6 +52,7 @@ def train_model(model, criterion, optimizer, scheduler, cfg, start_epoch=1):
 
     for epoch in range(start_epoch, cfg['max_epoch'] + 1):
 
+        epoch_start_time = time.time()
         print('-' * 60)
         print('Epoch: {} / {}'.format(epoch, cfg['max_epoch']))
         print('-' * 60)
@@ -138,7 +140,9 @@ def train_model(model, criterion, optimizer, scheduler, cfg, start_epoch=1):
                         "best_acc": best_acc,
                         "best_map": best_map
                     }, os.path.join(cfg['ckpt_root'], f"{epoch}.pkl"))
-                
+
+                epoch_time = time.time() - epoch_start_time
+                print(f"Epoch: {epoch}\n Epoch time: {epoch_time:.2f}s\n")
                 print(print_info)
 
     print('Best val acc: {:.4f}'.format(best_acc))
@@ -151,7 +155,7 @@ if __name__ == '__main__':
 
     # prepare model
     model = MeshNet(cfg=cfg['MeshNet'], require_fea=True)
-    device = torch.device("npu")
+    device = torch.device("npu:7")
 
     model = model.to(device)
 

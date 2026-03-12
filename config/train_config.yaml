@@ -1,6 +1,6 @@
 # CUDA
 #cuda_devices: '0,1'   # multi-gpu training is available
-npu_devices: '0,1'   # multi-gpu training is available
+npu_devices: '1'   # multi-gpu training is available
 
 # dataset
 dataset:

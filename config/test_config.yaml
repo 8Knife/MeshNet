@@ -1,6 +1,6 @@
 # CUDA
 #cuda_devices: '0'
-npu_devices: '0'
+npu_devices: '1'
 
 # dataset
 dataset:
